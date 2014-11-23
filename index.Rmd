@@ -1,0 +1,173 @@
+---
+title: "PLM Coursera WriteUp"
+author: "Frank Hasbani"
+date: "Saturday, November 22, 2014"
+output: html_document
+---
+# PLM Project
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+   
+   
+## Executive Summary
+
+The objective of this project is to build a Machine Learning Model that predicts the 'classe' of excercises that an individual followed, based on their captured activity quality from their individual monitors. The "classe" variable is one provided in the training set to help train the Model. We use any of the other variables to predict with. This report describes how we built this Model, how we used cross validation, what we think the expected out of sample error is, and why the basis on which we made the choices to build it. As a proof of suucessful prediction, we will also use the same prediction model to predict 20 different test cases. 
+
+### Loading the Data 
+
+The training data for this project are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv   
+   
+   We load the needed libraries, check is the Training and Testing files already exist, otherwise we download them from the source. Also in this process, we reset all of the "#DIV/0!", "", " ", values in the data to "NA:
+
+```{r, results=FALSE}
+library(caret); library(ISLR); library(ggplot2); library(rgl); library(rpart);library(randomForest);library(corrplot); library(randomForest); library(rpart.plot); library(prodlim); library(tree); library(knitr)
+##Download the data and read into file
+
+if (!file.exists("pml-Training.csv")) {
+     download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+                   destfile = "pml-Training.csv")
+}
+if (!file.exists("pml-Testing.csv")) {
+     download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+                   destfile = "pml-Testing.csv")
+}
+## Save files and format NAs
+
+training <- read.table("pml-training.csv", header=T, sep=",", na.strings = c("#DIV/0!", "", " ", "NA"))
+testing <- read.csv("pml-Testing.csv", header = T, na.strings = c("#DIV/0!", "", " ", "NA"))
+
+```
+
+The resulting tables are of the following dimensions:
+
+```{r, echo=FALSE}
+dim(training); dim(testing)
+```
+
+
+
+### Cleansing the Data 
+
+Clean ALL of the data sets of NAs, eliminate Zero Sums, and remove character Columns such as ("X","user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp","new_window" "windows) etc..:
+
+```{r, echo=FALSE}
+training <- training[,which(as.numeric(colSums(is.na(training)))/nrow(training) <= 0.9)]
+training <- training[8:length(training)]
+inTrain <- createDataPartition(y=training$classe, p=0.75, list=F)
+valSet <- training[-inTrain,]
+trSet <- training[inTrain,]
+testing <- testing[,which(as.numeric(colSums(is.na(testing)))/nrow(testing) <= 0.9)]
+testingset <- testing[8:length(testing)]
+
+```
+
+### Exploratory Analysis
+
+Correlation and Principal Component Analysis :   
+   
+```{r, echo=FALSE}
+dim(trSet); dim(valSet); dim(testingset)
+#identify the variables that have a high correlation with each other
+corrplot(cor(trSet[, -53]), order = "FPC", tl.cex = 0.7, tl.col = rgb(0, 0, 0))
+# obtain the principal components of the training set
+prComp<-prcomp(trSet[, -53], center = T, scale = T, newdata = valSet)
+prinComp <- princomp(~ ., data = trSet[, -53], newdata = valSet)
+# view the amount of varaiblity explained by the principal components
+plot(prComp, type="lines")
+plot(prinComp, type = "lines")
+```
+
+### Building the Model 
+
+We attempted a umber of approaches to build the model, some were less successful, while others were process extensive without producing better results. Below are the two we chose with their respective resultes in Accuracy, Kappa and Error Rate:   
+   
+
+```{r}
+# 
+set.seed(1975)
+# ctrl <- trainControl(method="cv", number=5, allowParallel = TRUE)
+# rpart Model
+rpartModel <- rpart(trSet$classe~., data=trSet[, -53], control=rpart.control(cp=0.01))
+prp(rpartModel, type = 4, box.col=5, leaf.round=1, tweak = 2, compress = TRUE)
+
+# randomForest Model
+rfModel <- randomForest(classe ~ ., data = trSet, proximity = T, importance = T) 
+varImpPlot(rfModel, pch = 20, cex = 0.8, main =  "Variable Importance" )
+
+###################################################################################################
+# This code below was abandonned due to slow processing without producing an improved results
+# rpModel <- train(trSet$classe~., data=trSet[, -53], method = "rpart", preProcess = c("center", "scale"), trControl = ctrl, tuneLength = 3)
+# predictionRp<- predict(rpModel, valSet, type = "raw")
+# confusionMatrix(predictionRp, valSet$classe)
+# PRp$overall[1:2]
+# print(PRp)
+# rfModel <- train(trSet$classe ~ ., data = trSet[, -53], method = "rf", trControl = ctrl, tuneLength = 3) 
+# 
+# predictionRF <- predict(rfModel, newdata = valSet, type = "raw")
+# PRf<-(confusionMatrix(predictionRF, valSet$classe))
+# print(PRf[2:3])
+#########################################################################################################
+
+```
+
+### Cross Validating the Model
+
+     
+```{r}
+#####  rpart Model
+rpartPredict <- predict(rpartModel, valSet, type = "class")
+PRpart <- confusionMatrix(rpartPredict, valSet$classe)
+#####  randomForest Model
+predictionRF <- predict(rfModel, newdata = valSet, type = "class")
+prf<-(confusionMatrix(predictionRF, valSet$classe))
+
+```
+  
+The Confusion Matrix for each of the rpart and randonForest modesl are below:   
+   
+```{r}
+PRpart$overall
+# print(PRpart)
+print(prf[2:3])
+
+```
+
+### The Best Model Selection Decision
+   
+The best model is that of randomForest due to higher accuracy in predicting "classe" because the Random Forest algorithm performed better than rpart.   
+The Accuracy for Random Forest model i 99.6%  compared to 70.7% for rpart model. The random Forest model is choosen. The accuracy of the model is 0.996. The expected out-of-sample error is estimated at 0.004, or 0.4%. The expected out-of-sample error is calculated as 1 - accuracy for predictions made against the cross-validation set. 
+   
+   Our Test data set comprises 20 cases. Considering the size of the dataset, none if any of the test samples will be missclassified.   
+   
+```{r}
+# Renaming the selected model to model2
+model2<-rfModel
+```
+
+-
+### The Model Submission
+ - predict outcome levels on the original Testing data set using Random Forest algorithm
+ - create the 20 files for the Submission
+   
+```{r}
+   
+predictfinal <- predict(model2, testingset, type="class")
+predictfinal
+
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictfinal)
+
+
+```
