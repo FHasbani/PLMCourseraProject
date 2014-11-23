@@ -45,7 +45,10 @@ testing <- read.csv("pml-Testing.csv", header = T, na.strings = c("#DIV/0!", "",
 The resulting tables are of the following dimensions:
 
 ```{r, echo=FALSE}
-dim(training); dim(testing)
+# Training Data
+dim(training)
+# Testing Data
+dim(testing)
 ```
 
 
@@ -67,23 +70,30 @@ testingset <- testing[8:length(testing)]
 
 ### Exploratory Analysis
 
-Correlation and Principal Component Analysis :   
+Correlation :     
    
 ```{r, echo=FALSE}
+# Respectively: Training, Validation and Testing Tables
 dim(trSet); dim(valSet); dim(testingset)
 #identify the variables that have a high correlation with each other
 corrplot(cor(trSet[, -53]), order = "FPC", tl.cex = 0.7, tl.col = rgb(0, 0, 0))
+
+```
+   
+Principal Component Analysis : 
+   
+```{r}
 # obtain the principal components of the training set
 prComp<-prcomp(trSet[, -53], center = T, scale = T, newdata = valSet)
-prinComp <- princomp(~ ., data = trSet[, -53], newdata = valSet)
 # view the amount of varaiblity explained by the principal components
-plot(prComp, type="lines")
-plot(prinComp, type = "lines")
+
+plot(prComp, type="lines", main="prComp")
+
 ```
 
 ### Building the Model 
 
-We attempted a umber of approaches to build the model, some were less successful, while others were process extensive without producing better results. Below are the two we chose with their respective resultes in Accuracy, Kappa and Error Rate:   
+We attempted a number of approaches to build the model, some were less successful, while others were process extensive without producing better results. Below are the rpart and randomForest we chose with their respective resultes in Accuracy, Kappa and Error Rate:   
    
 
 ```{r}
